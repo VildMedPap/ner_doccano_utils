@@ -1,4 +1,4 @@
-# NER utilities
+# NER doccano utilities
 
 ## Example data
 
