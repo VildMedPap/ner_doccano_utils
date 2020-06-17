@@ -11,6 +11,33 @@ import numpy as np
 import json
 
 
+class Tokenizers:
+    """Class holding spaCy sentencizer and BERT tokenizer."""
+
+    def __init__(
+        self,
+        spacy_lang_class: str = 'da',
+        bert_model: str = 'bert-base-multilingual-cased'
+    ) -> None:
+        """Initiate sentencizer and tokenizer.
+
+        Parameters
+        ----------
+        spacy_lang_class : str, optional
+            Two-letter language, by default 'da'
+        bert_model : str, optional
+            BERT model, by default 'bert-base-multilingual-cased'
+
+        """
+        # Initiate spaCy sentencizer
+        lang_class = get_lang_class(spacy_lang_class)
+        self.sentencizer = lang_class()
+        self.sentencizer.add_pipe(self.sentencizer.create_pipe('sentencizer'))
+
+        # Initiate BERT tokenizer
+        self.tokenizer = BertTokenizer.from_pretrained(bert_model)
+
+
 def load_json_lines(path: str) -> List[Dict]:
     """Load JSON lines.
 
@@ -70,10 +97,9 @@ def extract_entities(
     return labels_dict
 
 
-def tokenize_with_indices(
+def tokenize(
     doccano_document: Dict,
-    spacy_lang_class: str = 'da',
-    bert_model: str = 'bert-base-multilingual-cased'
+    tokenizers: Tokenizers
 ) -> List[Tuple[int, int, str]]:
     """Tokenize text and get indices for each tokenpiece.
 
@@ -81,10 +107,8 @@ def tokenize_with_indices(
     ----------
     doccano_document : Dict
         Must contain 'text' key
-    spacy_lang_class : str, optional
-        Two-letter language, by default 'da'
-    bert_model : str, optional
-        BERT model, by default 'bert-base-multilingual-cased'
+    tokenizers : Tokenizers
+        Tokenizers instantiated with Tokenizers class (spaCy and BERT models)
 
     Returns
     -------
@@ -94,16 +118,8 @@ def tokenize_with_indices(
     """
     text = doccano_document['text']
 
-    # Initiate spaCy sentencizer
-    cls = get_lang_class(spacy_lang_class)
-    sentencizer = cls()
-    sentencizer.add_pipe(sentencizer.create_pipe('sentencizer'))
-
-    # Initiate BERT tokenizer
-    tokenizer = BertTokenizer.from_pretrained(bert_model)
-
     # Sentencize text
-    sentences = sentencizer(text).sents
+    sentences = tokenizers.sentencizer(text).sents
 
     token_tuples = []
 
@@ -114,7 +130,7 @@ def tokenize_with_indices(
         # For each word in current sentence, tokenize word and store mapping
         for word in sentence:
             words.append(word)
-            tokenpieces = tokenizer.tokenize(word.text)
+            tokenpieces = tokenizers.tokenizer.tokenize(word.text)
             word_to_token_mapping.append((word, tokenpieces))
 
         # Map labels to token
@@ -141,3 +157,112 @@ def tokenize_with_indices(
     ]
 
     return token_tuples_unnested
+
+
+def distribute_labels(
+    doccano_document: Dict,
+    tokens: List[Tuple[int, int, str]]
+) -> List[str]:
+    """Distribute labels from doccano document to tokens.
+
+    Parameters
+    ----------
+    doccano_document : Dict
+        Must contain 'labels' key
+    tokens : List[Tuple[int, int, str]]
+        Each tuple contains start and end index for token as well as the token
+
+    Returns
+    -------
+    List[str]
+        List of labels. One for each token.
+
+    """
+    labels = doccano_document['labels']
+    token_labels = []
+
+    # For each token
+    for token_start, token_end, token in tokens:
+
+        # For each label
+        token_label = ''
+        for label_item in labels:
+            label_start, label_end, label = tuple(label_item)
+
+            if label_start <= token_start < label_end:
+                token_label = label
+        else:
+            token_labels.append(token_label)
+
+    return token_labels
+
+
+def iob(labels: List[str]) -> List[str]:
+    """Map labels to IOB schema.
+
+    Parameters
+    ----------
+    labels : List[str]
+        List of labels
+
+    Returns
+    -------
+    List[str]
+        List of labels in IOB format
+
+    """
+    labels = [
+        'I-' + label.upper()
+        if label != '' else 'O'
+        for label in labels
+    ]
+
+    for i in range(len(labels) - 1):
+        label = labels[i]
+        next_label = labels[i + 1]
+
+        if i == 0:
+            candidate = label
+            count = 0
+
+        if candidate == label and i != 0:
+            count += 1
+        else:
+            candidate = label
+            count = 0
+
+        if label == 'O':
+            pass
+        else:
+            if next_label == candidate and count == 0:
+                labels[i] = 'B' + labels[i][1:]
+
+    return labels
+
+
+def doccano_to_iob_tokens(
+    doccano_document: Dict,
+    tokenizers: Tokenizers
+) -> List[Tuple[str, str]]:
+    """Convert doccano document to tokens and iob labels.
+
+    Parameters
+    ----------
+    doccano_document : Dict
+        Must contain 'text' key
+    tokenizers : Tokenizers
+        Tokenizers instantiated with Tokenizers class (spaCy and BERT models)
+
+    Returns
+    -------
+    List[Tuple[str, str]]
+        Each tuples contains token and the corresponding IOB label
+
+    """
+    tokens = tokenize(doccano_document, tokenizers)
+    labels = distribute_labels(doccano_document, tokens)
+    iob_labels = iob(labels)
+
+    tokenpieces = [x[2] for x in tokens]
+
+    return list(zip(tokenpieces, iob_labels))
