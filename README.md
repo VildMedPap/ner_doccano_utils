@@ -12,7 +12,7 @@
     },
     {
         'text': 'Der er ikke fejet noget ind under gulvtæppet, sagde Statsminister Poul Schlüter fra Folketingets talerstol 25. april 1989.',
-        'labels': [[52, 65, 'title'], [66, 79, 'name'], [107, 121, 'date']]
+        'labels': [[52, 65, 'title'], [66, 79, 'name'], [84, 95, "org"], [107, 121, 'date']]
     },
     {
         'text': 'Lige ud af Næstved - ikke af betonen. Det er der, jeg er født og vokset op!',
