@@ -17,6 +17,10 @@
     {
         'text': 'Lige ud af Næstved - ikke af betonen. Det er der, jeg er født og vokset op!',
         'labels': [[11, 18, 'city']]
+    },
+    {
+        'text': 'DEN HÆSLIGE BY.\n\nSkrig er udspændt mellem husene\ni den hæslige by\nMenneskene er skygger\naf fabrikkerne og kontorerne,\nEn pige løfter sin kjole\nog hendes køn er et ur\nFragmenter af endnu fri bevidsthed\nhænger som en tåge i luften\nkun gennemlyst af neonøjnene\nGennem gaderne flaxer anskudte drømme\nmed vinger som vimpler af visnende blade\nI byens udkant ligger sindssygehospitalet\nhvor hvide patienter udvexler diagnoser,\nsmerte og medicin\nI det fjerneste rum\nligger den bedøvede drift\nfastspændt til en stinkende våd seng\nI dansehallen midt i byen danses Dødedisco\nDe midlertidige masker udleveres ved indgangen\nmod aflevering af visse hjernedele\nomfattende minder om barndom, kærlighed\nog drift mod stjerner og oprør.\n\nVi folder drømmens faner ud (1981) - Michael Strunge',
+        'labels': [[748, 752, 'year'], [756, 771, 'name']]
     }
 ]
 ```
@@ -33,7 +37,7 @@ doccano_data = load_json_lines('examples/danish.json')
 len(doccano_data)
 
 output:
-3
+4
 ```
 
 ```python
@@ -249,4 +253,79 @@ output:
  ('april', 'I-DATE'),
  ('1989', 'I-DATE'),
  ('.', 'O')]
+```
+
+
+### `display_annotations()`
+
+```python
+display_annotations(
+    doccano_document=doccano_data[1],
+    break_lines=True
+)
+```
+
+![](media/display_document.png)
+
+### `split_doc_into_sentences()`
+
+```python
+document = doccano_data[0]['text']
+split_doc_into_sentences(
+    document=document,
+    tokenizers=models,
+    MAX_LEN=128
+)
+
+output:
+[['DE', '##N', 'H', '##Æ', '##SL', '##IG', '##E', 'BY', '.'],
+ ['S',
+  '##kr',
+  '##ig',
+  'er',
+  'ud',
+  '##sp',
+  '##æ',
+  ... <-- (hiding 100 tokens)
+  '##ler',
+  'dia',
+  '##gnose',
+  '##r',
+  ',',
+  'sm',
+  '##erte'],
+ ['og',
+  'med',
+  '##ici',
+  '##n',
+  'I',
+  'det',
+  'f',
+  ... <-- (hiding 67 tokens)
+  'st',
+  '##jerne',
+  '##r',
+  'og',
+  'op',
+  '##rør',
+  '.'],
+ ['Vi',
+  'f',
+  '##old',
+  '##er',
+  'dr',
+  '##ømme',
+  '##ns',
+  'fan',
+  '##er',
+  'ud',
+  '(',
+  '1981',
+  ')',
+  '-',
+  'Michael',
+  'St',
+  '##rung',
+  '##e']]
+
 ```
