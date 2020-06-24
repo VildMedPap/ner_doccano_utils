@@ -9,6 +9,8 @@ from spacy.util import get_lang_class
 from transformers import BertTokenizer
 import numpy as np
 import json
+from seaborn import color_palette
+from IPython.core.display import display, HTML
 
 
 class Tokenizers:
@@ -266,3 +268,185 @@ def doccano_to_iob_tokens(
     tokenpieces = [x[2] for x in tokens]
 
     return list(zip(tokenpieces, iob_labels))
+
+
+def create_color_dict(labels: List[str]) -> Dict[str, Tuple[int, int, int]]:
+    """Create color dictionary.
+
+    Parameters
+    ----------
+    labels : List[str]
+        List of labels as strings
+
+    Returns
+    -------
+    Dict[str, Tuple[int, int, int]]
+        Dictionary with labels as keys and values as tuples of integers between
+        0 and 255 (rgb scale values)
+    """
+    palette = color_palette(None, len(labels))
+
+    color_dict = {}
+    for lab, pal in zip(labels, palette):
+        color_dict[lab] = (
+            int(pal[0]*255),
+            int(pal[1]*255),
+            int(pal[2]*255),
+        )
+
+    return color_dict
+
+
+def create_highlight_boxes(
+    color_dict: Dict[str, Tuple[int, int, int]],
+    a: float = 0.1,
+    border_size: int = 1,
+) -> Dict[str, str]:
+    """Create highlight boxes.
+
+    Parameters
+    ----------
+    color_dict : Dict[str, Tuple[int, int, int]]
+        Dictionary with labels as keys and values as tuples of integers between
+        0 and 255 (rgb scale values)
+    a : float, optional
+        Alpha value, transparency of highlight boxes , by default 0.1
+    border_size : int, optional
+        Border size of highlight boxes, by default 1
+
+    Returns
+    -------
+    Dict[str, str]
+        Dictionary with labels as keys and values as strings of html formatting
+
+    """
+    highlight_boxes = color_dict.copy()
+    border_style = 'solid'
+
+    for idx, (label, rgb) in enumerate(color_dict.items()):
+        if idx > 9:
+            border_style = 'dashed'
+
+        r, g, b = rgb
+        highlight_boxes[label] = f"""<span style="border: {border_size}px """ \
+            f"""{border_style} rgb({r}, {g}, {b});""" \
+            f"""background-color: rgba({r}, {g}, {b}, {a})">"""
+
+    return highlight_boxes
+
+
+def create_legend(highlight_boxes: Dict[str, str]) -> None:
+    """Create legend.
+
+    Parameters
+    ----------
+    highlight_boxes : Dict[str, str]
+        Dictionary with labels as keys and values as strings of html formatting
+
+    """
+    text = '<b>LEGEND</b>:'
+    space = '&nbsp;'
+    for key, val in highlight_boxes.items():
+        text += f'{space*4}{val}{space}{key}{space}</span>'
+
+    div = f'''<div style="line-height:3;font-family:Verdana;''' \
+          f'''font-size:13px">{text}</div>'''
+
+    display(HTML(div))
+
+
+def display_annotations(
+    doccano_document: Dict,
+    break_lines: bool = True
+) -> None:
+    """Display text with annotations.
+
+    Parameters
+    ----------
+    doccano_document : Dict
+        Must contain 'text' and 'labels' keys
+    break_lines : bool, optional
+        Whether or not to show linebreaks (\\n), by default True
+
+    """
+    labels = list({x[2] for x in doccano_document['labels']})
+    color_dict = create_color_dict(labels)
+    highlight_boxes = create_highlight_boxes(color_dict)
+
+    text = doccano_document['text']
+    for label in doccano_document['labels'][::-1]:
+        start = label[0]
+        end = label[1]
+        text = text[:start] + highlight_boxes[label[2]] + \
+            text[start:end] + '</span>' + text[end:]
+
+    if break_lines:
+        text = text.replace('\n', '<br/>')
+
+    create_legend(highlight_boxes)
+    display(HTML(
+        '<div style="line-height: 2;font-family: Verdana; font-size: 15px; '
+        'border: 1px solid grey; box-shadow: 0 0 5px rgba(0, 0, 0, 0.3), '
+        f'inset 0 0 50px rgba(0, 0, 0, 0.025); padding: 10px">{text}</div>'
+    ))
+
+
+def split_doc_into_sentences(
+    document,
+    tokenizers: Tokenizers,
+    MAX_LEN: int = 128
+) -> List[List[str]]:
+    """Split document into sentences of maximum length.
+
+    Parameters
+    ----------
+    document : [type]
+        String
+    MAX_LEN : int, optional
+        Maximum number of tokens in a sentence, by default 128
+    tokenizers : Tokenizers
+        Tokenizers instantiated with Tokenizers class (spaCy and BERT models)
+
+    Returns
+    -------
+    List[List[str]]
+        List of list of strings, which corresponds to one list of strings per
+        sentence
+
+    """
+    def split_sentence(
+        tokens: List[str],
+        MAX_LEN: int = MAX_LEN
+    ) -> List[List[str]]:
+        """Split sentence into chunks of maximum length.
+
+        Parameters
+        ----------
+        tokens : List[str]
+            List of tokens
+        MAX_LEN : int, optional
+            Maximum number of tokens in a sentence, by default MAX_LEN
+
+        Returns
+        -------
+        List[List[str]]
+            List of list of strings, which corresponds to one list of strings
+            per sentence
+
+        """
+        chunks = (len(tokens) + MAX_LEN - 1) // MAX_LEN
+        return [tokens[i * MAX_LEN:(i + 1) * MAX_LEN] for i in range(chunks)]
+
+    MAX_LEN = 128
+    sentences = tokenizers.sentencizer(document).sents
+    tokens_list = []
+    for sentence in sentences:
+        tokens = tokenizers.tokenizer.tokenize(sentence.text)
+
+        if len(tokens) > MAX_LEN:
+            chunks = split_sentence(tokens)
+            [tokens_list.append(x) for x in chunks]
+        else:
+            tokens_list.append(tokens)
+
+    return tokens_list
